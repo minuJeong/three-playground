@@ -69,38 +69,46 @@ function initThree()
     scene.add(entity);
 
     let rotator = new THREE.Object3D();
-    rotator.position.x = 3;
-    rotator.rotation.y = Math.PI * 0.15;
+    rotator.position.x = 10;
+    rotator.position.y = 2;
     rotator.position.z = 2;
+    rotator.rotation.y = -Math.PI * 0.15;
+    anime({
+        targets: rotator.rotation,
+        y: -Math.PI * 2.15,
+        duration: 2000,
+        loop: true,
+    });
     scene.add(rotator);
+
     let fontloader = new THREE.FontLoader();
     fontloader.load("static/fonts/Ubuntu_Bold.json", function(font)
     {
-        let geom = new THREE.TextGeometry(
-            "Minu", {
-                size: 2, height: 0.5, curveSegments: 5,
+        let textGeom = new THREE.TextGeometry(
+            "anime js", {
+                size: 2, height: 1, curveSegments: 5,
                 font: font,
             });
 
         let material = new THREE.MeshStandardMaterial({ color: 0xffdd77 });
-        let subentity = new THREE.Mesh(geom, material);
-        subentity.position.x = -3.5;
-        rotator.add(subentity);
-
-        anime({
-            targets: rotator.rotation,
-            y: -Math.PI * 1.85,
-            duration: 2000,
-            loop: true,
-            delay: 500,
-        });
+        let mesh = new THREE.Mesh(textGeom, material);
+        mesh.position.x = - Math.max(...textGeom.vertices.map((v)=>v.x)) * 0.5;
+        rotator.add(mesh);
     });
 
     light = new THREE.PointLight(0xffffff, 2.0);
     light.castShadow = true;
-    light.position.x = 2;
+    light.position.x = 5;
     light.position.y = 5;
     light.position.z = 10;
+    anime({
+        targets: light.position,
+        x: -5,
+        loop: true,
+        easing: 'linear',
+        direction: 'alternate',
+        duration: 2000,
+    });
     scene.add(light);
 
     let ambientLight = new THREE.AmbientLight(0x403080);
@@ -125,26 +133,45 @@ function initAmmo()
 
 function initScene()
 {
+    // floor
     addBody(new THREE.Object3D(),
         new Ammo.btBoxShape(new Ammo.btVector3(20, 1, 20)),
-        pos=new THREE.Vector3(0, -2.0, 0),
+        pos=new THREE.Vector3(0, -0.5, 0),
         quat=null,
         mass=0,
     );
 
-    let boxGeom = new THREE.BoxGeometry(1, 1, 1);
-    let boxMat = new THREE.MeshStandardMaterial({ color: 0x3388ff });
+    let boxGeom = new THREE.BoxGeometry(
+        width=1, height=1, depth=1,
+        widthSegments=2, heightSegments=2, lengthSegments=2,
+    );
+    
     let rotation = new THREE.Quaternion();
     for (var x = 0; x < 4; x++)
     {
         for (var y = 0; y < 4; y++)
         {
-            rotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI * (Math.random() * 0.5));
-            addBody(new THREE.Mesh(boxGeom, boxMat),
-                new Ammo.btBoxShape(new Ammo.btVector3(.5, .5, .5)),
-                pos=new THREE.Vector3(-8 + x, 5 + y, 2.5),
-                quat=rotation
-            );
+            for (var z = 0; z < 4; z++)
+            {
+                let r = (x / 4) * 0xff << 16;
+                let g = (y / 4) * 0xff << 8;
+                let b = (z / 4) * 0xff << 0;
+                let v = Math.pow(Math.random(), 4.0);
+                let boxMat = new THREE.MeshStandardMaterial({
+                    color: r | g | b,
+                    smoothness: v,
+                    matalness: v,
+                });
+                rotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI * (Math.random() * 0.5));
+                addBody(new THREE.Mesh(boxGeom, boxMat),
+                    new Ammo.btBoxShape(new Ammo.btVector3(.5, .5, .5)),
+                    pos=new THREE.Vector3(
+                        -10 + x + Math.random() * 0.2 - 0.1,
+                        5 + y + Math.random() * 0.2 - 0.1,
+                        2.5 + z + Math.random() * 0.2 - 0.1),
+                    quat=rotation
+                );
+            }
         }
     }
 }
