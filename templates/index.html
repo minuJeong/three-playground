@@ -12,24 +12,53 @@
         <div id="main" style="
             overflow: hidden;
             position: absolute;
-            width: 360px;
+            width: 460px;
             height: 460px;
             left: 50%;
             top: 50%;
             transform: translate(-50%, -50%);
             color: #ddd;
             background-color: #222;">
-            <div class="el">
-                hello world
+
+            <div class="el" style="
+                width: 120px;
+                height: 120px;
+                position: absolute;
+                left: 50%;
+                top: 20px;
+                background-color: #ddd;">
             </div>
 
-            <div class="el">
-                <div style="
-                    width: 50px;
-                    height: 50px;
-                    background-color: #111;"></div>
+            <div style="
+                position: absolute;
+                left: 50%;
+                top: 65%;
+                transform: translate(-50%, -50%);">
+                <div id="stage" style="width: 200px; height: 200px;"></div>
+            </div>
+
+            <div style="
+                position: absolute;
+                left: 50%;
+                bottom: 15px;
+                transform: translateX(-50%);">
+                Flask, Anime JS, Three JS
             </div>
         </div>
+
+        <script type="text/javascript">
+            anime({
+                targets: "#main .el",
+                translateX: [
+                    { value: '-70%', duration: 0 },
+                    { value: '20%', duration: 500 },
+                ],
+                rotate: { value: -10, easing: "easeOutElastic" },
+                direction: "alternate",
+                easing: "linear",
+                loop: true,
+            });
+        </script>
     </body>
 </html>
 
