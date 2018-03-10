@@ -40,7 +40,7 @@
         {
             let textGeom = new THREE.TextGeometry(
                 "contact", {
-                    size: 1.2, height: 0.1, curveSegments: 12,
+                    size: 1.85, height: 0.3, curveSegments: 12,
                     font: font,
                     bevelEnabled: true,
                     bevelThickness: 0.03,
@@ -54,7 +54,7 @@
             let textMesh = new THREE.Mesh(textGeom, material);
             let width = Math.max(...textGeom.vertices.map((v)=>v.x));
             textMesh.position.x = - width * 0.5;
-            textMesh.position.y = -6;
+            textMesh.position.y = -6.5;
             textMesh.castShadow = true;
             textMesh.receiveShadow = false;
             rotator.add(textMesh);
