@@ -25,7 +25,6 @@ let entity = null;
 let light = null;
 
 const defaultVertexShader = `
-
 void main()
 {
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -60,9 +59,9 @@ function initThree()
     camera = new THREE.PerspectiveCamera(
         55, W / H, 0.1, 10000
     );
-    camera.position.y = 15;
-    camera.position.z = 30;
-    camera.rotation.x = -Math.atan2(camera.position.y, camera.position.z);
+    camera.position.y = 8;
+    camera.position.z = 15;
+    camera.rotation.x = -Math.atan2(camera.position.y - 4.5, camera.position.z);
     scene.add(camera);
 
     renderer.setSize(W, H);
@@ -84,144 +83,90 @@ function initAmmo()
 
 function initScene()
 {
-    // anime js text
-    let rotator = new THREE.Object3D();
-    rotator.position.x = 10;
-    rotator.position.y = 5;
-    rotator.position.z = 4;
-    rotator.rotation.y = Math.PI * 3.85;
-    scene.add(rotator);
-    let fontloader = new THREE.FontLoader();
-    fontloader.load("static/fonts/Ubuntu_Bold.json", function(font)
-    {
-        let textGeom = new THREE.TextGeometry(
-            "anime js", {
-                size: 2, height: 0.35, curveSegments: 12,
-                font: font,
-                bevelEnabled: true,
-                bevelThickness: 0.03,
-                bevelSize: 0.01,
-            });
-
-        let material = new THREE.MeshStandardMaterial({ color: 0xffdd77 });
-        let mesh = new THREE.Mesh(textGeom, material);
-        let width = Math.max(...textGeom.vertices.map((v)=>v.x));
-        mesh.position.x = - width * 0.5;
-        rotator.add(mesh);
-
-        let circShadowGeom = new THREE.CircleGeometry(2.5, 24);
-        let circShadowMesh = new THREE.Mesh(
-            circShadowGeom, new THREE.MeshBasicMaterial({ color: 0x191919 }))
-        circShadowMesh.position.copy(rotator.position);
-        circShadowMesh.position.y = 0;
-        circShadowMesh.rotation.x = - Math.PI * 0.5;
-        scene.add(circShadowMesh);
-
-        // instead of simple loop, this reevaluates randoms
-        function rotate()
-        {
-            anime.remove(rotator.rotation);
-            rotator.rotation.y %= Math.PI * 2;
-            anime({
-                targets: rotator.rotation,
-                y: Math.PI * 3.85 + Math.random() * 0.1 - 0.05,
-                duration: 2000,
-                complete: ()=>rotate()
-            });
-        }
-        rotate();
-        anime({
-            targets: rotator.position,
-            y: 2.5,
-            direction: "alternate",
-            easing: "linear",
-            duration: 2000,
-            loop: true,
-        });
-
-        anime({
-            targets: circShadowMesh.scale,
-            x: 1.25,
-            y: 1.25,
-            z: 1.25,
-            direction: "alternate",
-            easing: "linear",
-            duration: 2000,
-            loop: true,
-        });
-    });
-
-    // light
-    light = new THREE.PointLight(0xffffff, 1.0);
+    // base light
+    light = new THREE.PointLight(0xffe0b0, 1.5);
+    light.decay = 2.0;
     light.castShadow = true;
-    light.position.x = 5;
-    light.position.y = 5;
-    light.position.z = 10;
-    function blink()
-    {
-        anime({
-            targets: light,
-            intensity: 0.8 + Math.random() * 0.1,
-            direction: 'alternate',
-            duration: 1000 + Math.random() * 1000,
-            complete: blink,
-        });
-    }
-    blink();
+    light.shadow.bias = 0.0001;
+    light.shadow.mapSize.Width = 1024;
+    light.shadow.mapSize.Height = 1024;
+    light.position.x = 10;
+    light.position.y = 15;
+    light.position.z = 20;
     scene.add(light);
 
-    let ambientLight = new THREE.AmbientLight(0x403080);
-    scene.add(ambientLight);
+    // ambient light
+    scene.add(new THREE.AmbientLight(0x404040, 1.5));
 
     // floor
-    addBody(new THREE.Object3D(),
-        new Ammo.btBoxShape(new Ammo.btVector3(20, 1, 20)),
-        pos=new THREE.Vector3(0, -0.5, 0),
+    let floorMaterial = new THREE.MeshLambertMaterial({ color: 0x252525 });
+    let floorView = new THREE.Mesh(new THREE.PlaneGeometry(15, 15), floorMaterial);
+    floorView.position.y = 1.0;
+    floorView.rotation.x = - Math.PI * 0.5;
+    floorView.receiveShadow = true;
+    let floor = new THREE.Object3D();
+    floor.add(floorView);
+    addBody(
+        floor,
+        new Ammo.btBoxShape(new Ammo.btVector3(7.5, 1, 7.5)),
+        pos=new THREE.Vector3(0, 0, 0),
         quat=null,
         mass=0,
     );
+    scene.add(floor);
     
     // ammo
     let rotation = new THREE.Quaternion();
-    for (var x = 0; x < 4; x++)
+    const X = 8, Y = 6, Z = 8;
+    for (var x = 0; x < X; x++)
     {
-        for (var y = 0; y < 4; y++)
+        for (var y = 0; y < Y; y++)
         {
-            for (var z = 0; z < 4; z++)
+            for (var z = 0; z < Z; z++)
             {
                 let geom = null;
                 let shape = null;
-                if (Math.random() < 0.9)
+                let size = 0.4 + Math.random() * 1.0
+                if (Math.random() < 0.85)
                 {
-                    geom = new THREE.BoxGeometry(1, 1, 1);
-                    shape = new Ammo.btBoxShape(new Ammo.btVector3(.5, .5, .5));
+                    geom = new THREE.BoxGeometry(size, size, size, 4, 4, 4);
+                    shape = new Ammo.btBoxShape(new Ammo.btVector3(size * .5, size * .5, size * .5));
                 } else
                 {
-                    geom = new THREE.SphereGeometry(
-                        radius=0.5, widthSegments=6, heightSegments=6
-                    );
-                    shape = new Ammo.btSphereShape(0.25);
+                    geom = new THREE.SphereGeometry(radius=size * 0.5, widthSegments=12, heightSegments=12);
+                    shape = new Ammo.btSphereShape(size * 0.5);
                 }
 
-                let v = Math.pow(Math.random(), 2.0);
+                let v = Math.random();
+                let color = (x / X) * 0xff << 16 | (y / Y) * 0xff << 8 | (z / Z) * 0xff << 0;
                 let boxMat = new THREE.MeshStandardMaterial({
-                    color: (x / 4) * 0xff << 16 | (y / 4) * 0xff << 8 | (z / 4) * 0xff << 0,
-                    smoothness: v,
-                    matalness: v,
-                    wireframe: true,
-                    wireframeLinewidth: 0.25,
+                    color: color,
+                    roughness: v > 0.5 ? 0.8 : 0.2
                 });
 
-                rotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI * (Math.random() * 0.5));
                 let mesh = new THREE.Mesh(geom, boxMat);
-                addBody(
-                    mesh,
-                    shape,
+                if (v > 0.5)
+                {
+                    let boxMatWire = new THREE.MeshBasicMaterial(
+                    {
+                        color: 0x000000,
+                        wireframe: true,
+                        wireframeLinewidth: 0.125,
+                        opacity: 0.15,
+                        transparent: true,
+                    });
+                    mesh.add(new THREE.Mesh(geom, boxMatWire));
+                }
+
+                rotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI * (Math.random() * 0.5));
+                mesh.castShadow = true;
+                addBody(mesh, shape,
                     pos=new THREE.Vector3(
-                        -10 + x + Math.random() * 0.4 - 0.2,
-                        5 + y + Math.random() * 0.2 - 0.1,
-                        3 + z + Math.random() * 0.4 - 0.2),
-                    quat=rotation
+                        x + Math.random() * 0.4 - 0.2 - (X * 0.5),
+                        y + Math.random() * 0.2 - 0.1 + 10,
+                        z + Math.random() * 0.4 - 0.2 - (Z * 0.5)),
+                    quat=rotation,
+                    mass=size*size*size,
                 );
                 scene.add(mesh);
             }
@@ -247,6 +192,16 @@ function animate()
             state.getWorldTransform(trans);
             let pos = trans.getOrigin();
             let quat = trans.getRotation();
+
+            if (pos.y() < -5)
+            {
+                trans.setOrigin(new Ammo.btVector3(
+                    Math.random() * 4 - 2,
+                    15,
+                    Math.random() * 4 - 2));
+                body.setWorldTransform(trans);
+            }
+
             threeObj.position.set(pos.x(), pos.y(), pos.z());
             threeObj.quaternion.set(quat.x(), quat.y(), quat.z(), quat.w());
         }
@@ -315,14 +270,14 @@ stage.onclick = function(e)
 
 }
 
-window.onresize = function(e)
+window.addEventListener("resize", (e)=>
 {
     W = stage.clientWidth;
     H = stage.clientHeight;
     camera.aspect = W / H;
     camera.updateProjectionMatrix();
     renderer.setSize(W, H);
-}
+});
 
 Ammo().then(()=>
 {
