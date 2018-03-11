@@ -30,7 +30,7 @@ const uniform = {
     }
 };
 
-const defaultVertexShader = `
+const vs_DEFAULT = `
 uniform float time;
 void main()
 {
@@ -38,7 +38,7 @@ void main()
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position * r, 1.0);
 }`;
 
-const fragShader_FLATCOLOR = `
+const fs_FLATCOLOR = `
 uniform float time;
 void main()
 {
@@ -50,48 +50,54 @@ void main()
     );
 }`;
 
-function getRandomMaterial(color, v)
+const vs_NORMALCOLOR = `
+varying vec3 v_normal;
+void main()
+{
+    v_normal = abs(normal);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+
+const fs_NORMALCOLOR = `
+varying vec3 v_normal;
+void main()
+{
+    gl_FragColor = vec4(v_normal, 1.0);
+}
+`;
+
+function getRandomMaterial(color)
 {
     let shaderSet =
     [{
-        vert: defaultVertexShader,
-        frag: fragShader_FLATCOLOR
+        vert: vs_DEFAULT,
+        frag: fs_FLATCOLOR,
     },
-    ];
-
-    const MAX = shaderSet.length;
-    let material = null;
-    let i = Math.round(Math.random() * (MAX + 1));
-
-    switch(i)
     {
-        case 0:
-            let targetSet = shaderSet[i];
-            material = new THREE.ShaderMaterial(
-            {
-                uniforms: uniform,
-                vertexShader: targetSet.vert,
-                fragmentShader: targetSet.frag,
-                transparent: true,
-            });
-            break;
+        vert: vs_NORMALCOLOR,
+        frag: fs_NORMALCOLOR,
+    }];
 
-        case MAX:
-            material = new THREE.MeshBasicMaterial(
-            {
-                color: color,
-                wireframe: true,
-                wireframeLinewidth: 0.5,
-            });
-            break;
-
-        default:
-            material = new THREE.MeshStandardMaterial(
-            {
-                color: color,
-                roughness: v > 0.5 ? 0.8 : 0.2
-            });
-            break;
+    const SHADER_COUNT = shaderSet.length;
+    let material = null;
+    let i = Math.round(Math.random() * (SHADER_COUNT + 1));
+    if(i >= SHADER_COUNT)
+    {
+        material = new THREE.MeshBasicMaterial(
+        {
+            color: color,
+            wireframe: true,
+            wireframeLinewidth: 0.5,
+        });
+    } else {
+        let targetSet = shaderSet[i];
+        material = new THREE.ShaderMaterial(
+        {
+            uniforms: uniform,
+            vertexShader: targetSet.vert,
+            fragmentShader: targetSet.frag,
+            transparent: true,
+        });
     }
     return material;
 }
@@ -195,9 +201,8 @@ function initScene()
                     shape = new Ammo.btSphereShape(size * 0.5);
                 }
 
-                let v = Math.random();
                 let color = (x / X) * 0xff << 16 | (y / Y) * 0xff << 8 | (z / Z) * 0xff << 0;
-                let boxMat = getRandomMaterial(color, v);
+                let boxMat = getRandomMaterial(color);
                 let mesh = new THREE.Mesh(geom, boxMat);
                 rotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI * (Math.random() * 0.5));
                 mesh.castShadow = true;
