@@ -34,48 +34,71 @@ const uniform = {
     },
 };
 
-const vs_SCALE = `
+const vs_DEFAULT = `
+varying vec3 E;
 varying vec3 v_pos;
-varying vec3 v_norm;
+varying vec3 v_worldNorm;
+varying float v_fresnel;
 void main()
 {
-    v_norm = (modelViewMatrix * vec4(normal, 1.0)).xyz;
+    vec3 worldpos = (modelMatrix * vec4(position, 1.0)).xyz;
+    vec3 E = normalize(worldpos - cameraPosition);
+    mat3 modelMat3 = mat3(modelMatrix[0].xyz,
+                          modelMatrix[1].xyz,
+                          modelMatrix[2].xyz);
+    v_worldNorm = normalize(modelMat3 * normal);
+    v_fresnel = min(dot(E, v_worldNorm), 1.0) * 2.0;
+
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    v_pos = gl_Position.xyz;
+    v_pos = (modelMatrix * vec4(position, 1.0)).xyz;
 }`;
 
 const fs_FLATCOLOR = `
 uniform vec3 mainlightpos;
+varying vec3 E;
 varying vec3 v_pos;
-varying vec3 v_norm;
+varying vec3 v_worldNorm;
+varying float v_fresnel;
 void main()
 {
     vec3 L = mainlightpos - v_pos;
-    vec3 N = normalize(v_norm);
-    vec3 H = (reflect(N, L) + normalize(v_pos - cameraPosition)) / 2.0;
+    vec3 H = (normalize(reflect(v_worldNorm, L)) + E) / 2.0;
 
-    float ndl = dot(N, normalize(L));
-    float ndh = dot(N, normalize(H));
-    float r = floor(ndl * 24.0) / 24.0;
+    float ndl = dot(v_worldNorm, normalize(L));
+    float ndh = dot(v_worldNorm, normalize(H));
+    float fresnel = dot(v_worldNorm, normalize(E));
 
-    gl_FragColor = vec4(
-        r, r, r, 1.0
-    );
+    vec3 diffuse = mix(vec3(0.6, 0.8, 0.9), vec3(0.9, 0.1, 0.4), 1.0 - ndl);
+    vec3 fresnelColor = mix(vec3(0.0, 0.0, 0.0), vec3(1.0, 0.1, 0.1), v_fresnel);
+
+    gl_FragColor = vec4(diffuse + fresnelColor, 1.0);
 }`;
 
 const vs_NORMALCOLOR = `
-varying vec3 v_normal;
+varying vec3 v_worldNorm;
+varying vec2 v_uv;
 void main()
 {
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    v_normal = normalize(gl_Position.xyz);
+    mat3 modelMat3 = mat3(modelMatrix[0].xyz,
+                          modelMatrix[1].xyz,
+                          modelMatrix[2].xyz);
+    v_worldNorm = normalize(modelMat3 * normal);
+    v_uv = uv;
 }`;
 
 const fs_NORMALCOLOR = `
-varying vec3 v_normal;
+uniform float time;
+varying vec3 v_worldNorm;
+varying vec2 v_uv;
 void main()
 {
-    gl_FragColor = vec4(v_normal * 1.0, 1.0);
+    vec3 nc = normalize(v_worldNorm) * 0.55;
+    vec2 dd = abs(vec2(0.5, 0.5) - v_uv.xy);
+    dd = dd - mod(dd, abs(cos(time) * 0.2));
+    float dp = length(pow(dd, vec2(4.0, 4.0)));
+    vec3 dclr = vec3(dp, dp * 0.5, dp) * 12.5;
+    gl_FragColor = vec4(nc + dclr, 1.0);
 }
 `;
 
@@ -104,21 +127,59 @@ void main()
     );
 }`;
 
+const vs_Floor = `
+varying vec3 v_pos;
+varying vec3 v_worldNorm;
+varying vec2 v_uv;
+void main()
+{
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    mat3 modelMat3 = mat3(modelMatrix[0].xyz,
+                          modelMatrix[1].xyz,
+                          modelMatrix[2].xyz);
+    v_worldNorm = normalize(modelMat3 * normal);
+    v_pos = (modelMatrix * gl_Position).xyz;
+    v_uv = uv;
+}`;
+
+const fs_Floor = `
+uniform float time;
+varying vec3 v_pos;
+varying vec3 v_worldNorm;
+varying vec2 v_uv;
+void main()
+{
+    vec3 L = vec3(0.0, 10.0, 35.0) - v_pos;
+    float ndl = dot(v_worldNorm, normalize(L));
+    float distance = length(L) / 40.0;
+    float slicer = 16.0;
+    float v = (floor((1.0 / distance) * slicer) / slicer) * 0.95;
+    vec3 c1 = vec3(0.66, 0.66, 0.66) * v;
+
+    vec2 d = abs(v_uv - vec2(0.5, 0.5));
+    d = floor(d / vec2(0.465, 0.465));
+    d = max(vec2(d.x, d.x), vec2(d.y, d.y));
+    vec3 c2 = vec3(0.11, 0.11, 0.12) * (d.x + d.y);
+
+    gl_FragColor = vec4((c1 + c2) * pow(ndl * 1.5, 1.25), 1.0);
+}`;
+
 function getRandomMaterial(color)
 {
     let shaderSet =
     [{
-        vert: vs_SCALE,
+        vert: vs_DEFAULT,
         frag: fs_FLATCOLOR,
     },
     {
         vert: vs_NORMALCOLOR,
         frag: fs_NORMALCOLOR,
     },
-    {
-        vert: vs_YPOSCOLOR,
-        frag: fs_YPOSCOLOR,
-    }];
+    // {
+    //     vert: vs_YPOSCOLOR,
+    //     frag: fs_YPOSCOLOR,
+    // }
+    ];
 
     const SHADER_COUNT = shaderSet.length;
     let material = null;
@@ -153,16 +214,14 @@ function initThree()
         alpha: true,
         antialias: true,
     });
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     clock = new THREE.Clock();
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(
         55, W / H, 0.1, 10000
     );
     camera.position.y = 4;
-    camera.position.z = 10;
-    camera.rotation.x = -Math.atan2(camera.position.y - 2.75, camera.position.z);
+    camera.position.z = 9;
+    camera.rotation.x = -Math.atan2(camera.position.y - 0.85, camera.position.z);
     scene.add(camera);
 
     renderer.setSize(W, H);
@@ -184,36 +243,33 @@ function initAmmo()
 
 async function initScene()
 {
-    // base light
-    light = new THREE.PointLight(0xffe0b0, 1.5);
-    light.decay = 2.0;
-    light.castShadow = false;
-    light.shadow.bias = 0.00001;
-    light.shadow.mapSize.Width = 1024;
-    light.shadow.mapSize.Height = 1024;
-    let lightPos = new THREE.Vector3(10, 15, 20);
-    light.position.copy(lightPos);
-    lightPos.normalize();
+    // abstract light
+    let lightPos = new THREE.Vector3(-5, 15, 10);
     uniform.mainlightpos.value = lightPos;
-    scene.add(light);
-    scene.add(new THREE.PointLightHelper(light));
 
     // ambient light
     scene.add(new THREE.AmbientLight(0x404040, 2.0));
 
     // floor
-    const FLOOR_SIZE = 7.75;
-    let floorMaterial = new THREE.MeshLambertMaterial({ color: 0x808080 });
-    let floorView = new THREE.Mesh(new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE), floorMaterial);
-    floorView.position.y = 1.0;
-    floorView.rotation.x = - Math.PI * 0.5;
-    floorView.receiveShadow = true;
+    const FLOOR_SIZE = 5.5;
+    const FLOOR_HEIGHT = 5.0;
+    let floorMaterial = new THREE.ShaderMaterial(
+    {
+        uniforms: uniform,
+        vertexShader: vs_Floor,
+        fragmentShader: fs_Floor,
+    });
+    let floorView = new THREE.Mesh(
+        new THREE.BoxGeometry(FLOOR_SIZE, FLOOR_HEIGHT, FLOOR_SIZE),
+        floorMaterial
+    );
+
     let floor = new THREE.Object3D();
     floor.add(floorView);
     addBody(
         floor,
-        new Ammo.btBoxShape(new Ammo.btVector3(FLOOR_SIZE * 0.5, 1, FLOOR_SIZE * 0.5)),
-        pos=new THREE.Vector3(0, 0, 0),
+        new Ammo.btBoxShape(new Ammo.btVector3(FLOOR_SIZE * 0.5, FLOOR_HEIGHT * 0.5, FLOOR_SIZE * 0.5)),
+        pos=new THREE.Vector3(0, -FLOOR_HEIGHT * 0.5, 0),
         quat=null,
         mass=0,
     );
@@ -224,7 +280,6 @@ async function initScene()
     {
         let x = pos.x, y = pos.y, z = pos.z;
         rotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI * (Math.random() * 0.5));
-        mesh.castShadow = true;
         let body = addBody(mesh, shape,
             pos=new THREE.Vector3(
                 x + Math.random() * 1 - 0.5 - (X * 0.5),
@@ -233,7 +288,7 @@ async function initScene()
             quat=rotation,
             mass=mass,
         );
-        body.setRestitution(0.25);
+        body.setRestitution(0.45);
         scene.add(mesh);
     }
 
@@ -252,7 +307,7 @@ async function initScene()
                         let font = loadedFont;
                         let geom = new THREE.TextGeometry(characters[charIdx],
                         {
-                            size: size, height: size * 0.85,
+                            size: size, height: size * 0.25,
                             curveSegments: 12,
                             font: font,
                             bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.01,
@@ -260,13 +315,15 @@ async function initScene()
 
                         let center = new THREE.Object3D();
                         let mesh = new THREE.Mesh(geom, material);
-                        mesh.position.copy(new THREE.Vector3(size * -0.5, size * -0.5, size * -0.5));
+                        mesh.position.copy(new THREE.Vector3(size * -0.5, size * -0.5, size * -0.125));
                         center.add(mesh);
+                        shape = new Ammo.btBoxShape(new Ammo.btVector3(size * .5, size * .5, size * .125));
                         addToScene(center, shape, size * size * size, pos);
                     });
                 break;
 
             default:
+                shape = new Ammo.btBoxShape(new Ammo.btVector3(size * .5, size * .5, size * .5));
                 addToScene(
                     new THREE.Mesh(
                         new THREE.BoxGeometry(size, size, size, 4, 4, 4),
@@ -285,20 +342,19 @@ async function initScene()
             {
                 let geom = null;
                 let shape = null;
-                let size = 0.7 + Math.random() * 0.4;
+                let size = 0.45 + Math.random() * 0.45;
                 let pos = new THREE.Vector3(x, y, z);
                 let color = (x / X) * 0xff << 16 | (y / Y) * 0xff << 8 | (z / Z) * 0xff << 0;
                 let material = getRandomMaterial(color);
 
                 if (Math.random() < 0.5)
                 {
-                    shape = new Ammo.btBoxShape(new Ammo.btVector3(size * .5, size * .5, size * .5));
                     addRandomBox(size, material, shape, pos);
                 }
                 else
                 {
                     shape = new Ammo.btSphereShape(size * 0.5);
-                    geom = new THREE.SphereGeometry(radius=size * 0.5, widthSegments=12, heightSegments=12);
+                    geom = new THREE.SphereGeometry(radius=size * 0.5, widthSegments=24, heightSegments=24);
                     addToScene(new THREE.Mesh(geom, material), shape, size * size * size, pos);
                 }                
             }
