@@ -27,14 +27,18 @@ let light = null;
 const uniform = {
     time: {
         value: 0.0
-    }
+    },
+    mainlightdir: {
+        type: 'v3',
+        value: new THREE.Vector3(0, 1, 0)
+    },
 };
 
-const vs_DEFAULT = `
+const vs_SCALE = `
 uniform float time;
 void main()
 {
-    float r = cos(time * 6.74) * 0.25 + 0.75;
+    float r = cos(time * 6.74) * 0.05 + 0.95;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position * r, 1.0);
 }`;
 
@@ -66,29 +70,52 @@ void main()
 }
 `;
 
+const vs_YPOSCOLOR = `
+varying float v_ypos;
+varying vec2 v_uv;
+void main()
+{
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    v_ypos = position.y;
+    v_uv = uv;
+}`;
+
+const fs_YPOSCOLOR = `
+uniform float time;
+varying float v_ypos;
+varying vec2 v_uv;
+void main()
+{
+    float delt = cos(time * 3.0) * 8.0 + 9.0;
+    gl_FragColor = vec4(
+        cos(v_ypos) * 0.5 + 0.5,
+        0.15 + floor(v_uv.x * delt) / delt,
+        0.15 + floor(v_uv.y * delt) / delt,
+        1);
+}`;
+
 function getRandomMaterial(color)
 {
     let shaderSet =
     [{
-        vert: vs_DEFAULT,
+        vert: vs_SCALE,
         frag: fs_FLATCOLOR,
     },
     {
         vert: vs_NORMALCOLOR,
         frag: fs_NORMALCOLOR,
+    },
+    {
+        vert: vs_YPOSCOLOR,
+        frag: fs_YPOSCOLOR,
     }];
 
     const SHADER_COUNT = shaderSet.length;
     let material = null;
-    let i = Math.round(Math.random() * (SHADER_COUNT + 1));
+    let i = Math.floor(Math.random() * (SHADER_COUNT));
     if(i >= SHADER_COUNT)
     {
-        material = new THREE.MeshBasicMaterial(
-        {
-            color: color,
-            wireframe: true,
-            wireframeLinewidth: 0.5,
-        });
+        material = new THREE.MeshStandardMaterial({ color: color, });
     } else {
         let targetSet = shaderSet[i];
         material = new THREE.ShaderMaterial(
@@ -123,9 +150,9 @@ function initThree()
     camera = new THREE.PerspectiveCamera(
         55, W / H, 0.1, 10000
     );
-    camera.position.y = 8;
-    camera.position.z = 15;
-    camera.rotation.x = -Math.atan2(camera.position.y - 4.5, camera.position.z);
+    camera.position.y = 4;
+    camera.position.z = 10;
+    camera.rotation.x = -Math.atan2(camera.position.y - 2.75, camera.position.z);
     scene.add(camera);
 
     renderer.setSize(W, H);
@@ -151,20 +178,22 @@ function initScene()
     light = new THREE.PointLight(0xffe0b0, 1.5);
     light.decay = 2.0;
     light.castShadow = true;
-    light.shadow.bias = 0.0001;
+    light.shadow.bias = 0.00001;
     light.shadow.mapSize.Width = 1024;
     light.shadow.mapSize.Height = 1024;
     light.position.x = 10;
     light.position.y = 15;
     light.position.z = 20;
     scene.add(light);
+    scene.add(new THREE.PointLightHelper(light));
 
     // ambient light
     scene.add(new THREE.AmbientLight(0x404040, 2.0));
 
     // floor
-    let floorMaterial = new THREE.MeshLambertMaterial({ color: 0x252525 });
-    let floorView = new THREE.Mesh(new THREE.PlaneGeometry(15, 15), floorMaterial);
+    const FLOOR_SIZE = 7.75;
+    let floorMaterial = new THREE.MeshLambertMaterial({ color: 0x505050 });
+    let floorView = new THREE.Mesh(new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE), floorMaterial);
     floorView.position.y = 1.0;
     floorView.rotation.x = - Math.PI * 0.5;
     floorView.receiveShadow = true;
@@ -172,7 +201,7 @@ function initScene()
     floor.add(floorView);
     addBody(
         floor,
-        new Ammo.btBoxShape(new Ammo.btVector3(7.5, 1, 7.5)),
+        new Ammo.btBoxShape(new Ammo.btVector3(FLOOR_SIZE * 0.5, 1, FLOOR_SIZE * 0.5)),
         pos=new THREE.Vector3(0, 0, 0),
         quat=null,
         mass=0,
@@ -181,7 +210,7 @@ function initScene()
     
     // ammo
     let rotation = new THREE.Quaternion();
-    const X = 8, Y = 6, Z = 8;
+    const X = 4, Y = 4, Z = 4;
     for (var x = 0; x < X; x++)
     {
         for (var y = 0; y < Y; y++)
@@ -190,8 +219,8 @@ function initScene()
             {
                 let geom = null;
                 let shape = null;
-                let size = 0.7 + Math.random() * 0.5
-                if (Math.random() < 0.85)
+                let size = 0.7 + Math.random() * 0.4
+                if (Math.random() < 0.5)
                 {
                     geom = new THREE.BoxGeometry(size, size, size, 4, 4, 4);
                     shape = new Ammo.btBoxShape(new Ammo.btVector3(size * .5, size * .5, size * .5));
@@ -243,9 +272,9 @@ function animate()
             if (pos.y() < -5)
             {
                 trans.setOrigin(new Ammo.btVector3(
-                    Math.random() * 4 - 2,
-                    15,
-                    Math.random() * 4 - 2));
+                    Math.random() * 1 - 0.5,
+                    10,
+                    Math.random() * 1 - 0.5));
                 body.setWorldTransform(trans);
             }
 
