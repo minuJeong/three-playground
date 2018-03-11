@@ -9,6 +9,10 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 def index():
     return render_template("index.html")
 
+@app.route("/contact")
+def contact():
+    return render_template("contact.html")
+
 @app.after_request
 def add_header(r):
     r.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"

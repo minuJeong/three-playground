@@ -24,19 +24,77 @@ let camera = null;
 let entity = null;
 let light = null;
 
-const defaultVertexShader = `
-void main()
-{
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}
-`;
+const uniform = {
+    time: {
+        value: 0.0
+    }
+};
 
-const defaultFragShader = `
+const defaultVertexShader = `
+uniform float time;
 void main()
 {
-    gl_FragColor = vec4(1, 1, 1, 1);
+    float r = cos(time * 6.74) * 0.25 + 0.75;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position * r, 1.0);
+}`;
+
+const fragShader_FLATCOLOR = `
+uniform float time;
+void main()
+{
+    gl_FragColor = vec4(
+        0.9,
+        sin(time * 2.5) * 0.5 + 0.5,
+        cos(time * 2.5) * 0.5 + 0.5,
+        sin(time * 10.0) * 0.25 + 0.75
+    );
+}`;
+
+function getRandomMaterial(color, v)
+{
+    let shaderSet =
+    [{
+        vert: defaultVertexShader,
+        frag: fragShader_FLATCOLOR
+    },
+    ];
+
+    const MAX = shaderSet.length;
+    let material = null;
+    let i = Math.round(Math.random() * (MAX + 1));
+
+    switch(i)
+    {
+        case 0:
+            let targetSet = shaderSet[i];
+            material = new THREE.ShaderMaterial(
+            {
+                uniforms: uniform,
+                vertexShader: targetSet.vert,
+                fragmentShader: targetSet.frag,
+                transparent: true,
+            });
+            break;
+
+        case MAX:
+            material = new THREE.MeshBasicMaterial(
+            {
+                color: color,
+                wireframe: true,
+                wireframeLinewidth: 0.5,
+            });
+            break;
+
+        default:
+            material = new THREE.MeshStandardMaterial(
+            {
+                color: color,
+                roughness: v > 0.5 ? 0.8 : 0.2
+            });
+            break;
+    }
+    return material;
 }
-`;
 
 let rigidBodyObjs = [];
 let collisionConfiguration = null;
@@ -96,7 +154,7 @@ function initScene()
     scene.add(light);
 
     // ambient light
-    scene.add(new THREE.AmbientLight(0x404040, 1.5));
+    scene.add(new THREE.AmbientLight(0x404040, 2.0));
 
     // floor
     let floorMaterial = new THREE.MeshLambertMaterial({ color: 0x252525 });
@@ -126,7 +184,7 @@ function initScene()
             {
                 let geom = null;
                 let shape = null;
-                let size = 0.4 + Math.random() * 1.0
+                let size = 0.7 + Math.random() * 0.5
                 if (Math.random() < 0.85)
                 {
                     geom = new THREE.BoxGeometry(size, size, size, 4, 4, 4);
@@ -139,25 +197,8 @@ function initScene()
 
                 let v = Math.random();
                 let color = (x / X) * 0xff << 16 | (y / Y) * 0xff << 8 | (z / Z) * 0xff << 0;
-                let boxMat = new THREE.MeshStandardMaterial({
-                    color: color,
-                    roughness: v > 0.5 ? 0.8 : 0.2
-                });
-
+                let boxMat = getRandomMaterial(color, v);
                 let mesh = new THREE.Mesh(geom, boxMat);
-                if (v > 0.5)
-                {
-                    let boxMatWire = new THREE.MeshBasicMaterial(
-                    {
-                        color: 0x000000,
-                        wireframe: true,
-                        wireframeLinewidth: 0.125,
-                        opacity: 0.15,
-                        transparent: true,
-                    });
-                    mesh.add(new THREE.Mesh(geom, boxMatWire));
-                }
-
                 rotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI * (Math.random() * 0.5));
                 mesh.castShadow = true;
                 addBody(mesh, shape,
@@ -181,6 +222,7 @@ function animate()
 
     let deltaTime = clock.getDelta();
     ammoWorld.stepSimulation(deltaTime, 10);
+    uniform.time.value += deltaTime;
 
     let trans = new Ammo.btTransform();
     rigidBodyObjs.map((threeObj)=>

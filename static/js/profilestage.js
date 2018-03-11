@@ -29,9 +29,9 @@
 
     // anime js text
     let rotator = new THREE.Object3D();
+    rotator.position.x = -0.75;
     rotator.position.y = -0.5;
     rotator.position.z = -5;
-    rotator.rotation.y = -Math.PI * 0.05;
     scene.add(rotator);
 
     (async function()
@@ -91,19 +91,16 @@
         });
     }());
 
-    // instead of simple loop, this reevaluates randoms
-    function rotate()
-    {
-        anime.remove(rotator.rotation);
-        anime({
-            targets: rotator.rotation,
-            y: -Math.PI * 0.05 + Math.random() * 0.2 - 0.1,
-            duration: 1000,
-            delay: Math.random() * 500,
-            complete: ()=>rotate()
-        });
-    }
-    rotate();
+    rotator.rotation.x = Math.PI * 0.02;
+    rotator.rotation.y = -Math.PI * 0.07;
+    rotator.rotation.z = -Math.PI * 0.01;
+    anime({
+        targets: rotator.rotation,
+        z: Math.PI * 0.01,
+        duration: 1000,
+        loop: true,
+        direction: "alternate",
+    });
 
     profile_stage.appendChild(renderer.domElement);
     renderer.domElement.style.width = '100%';
