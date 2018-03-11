@@ -244,14 +244,13 @@ async function initScene()
         {
             case 0:
                 let fontloader = new THREE.FontLoader();
-                let chrFrom = "A".charCodeAt(0);
-                let chrTo = "z".charCodeAt(0);
-                let charCode = Math.floor(Math.random() * (chrTo - chrFrom)) + chrFrom;
+                let characters = "ABCDEFGHKMNOQRSTUVWXYZ";
+                let charIdx = Math.floor(Math.random() * characters.length);
                 await fontloader.load("static/fonts/Ubuntu_Bold.json",
                     (loadedFont)=>
                     {
                         let font = loadedFont;
-                        let geom = new THREE.TextGeometry(String.fromCharCode(charCode),
+                        let geom = new THREE.TextGeometry(characters[charIdx],
                         {
                             size: size, height: size * 0.85,
                             curveSegments: 12,
