@@ -28,29 +28,38 @@ const uniform = {
     time: {
         value: 0.0
     },
-    mainlightdir: {
+    mainlightpos: {
         type: 'v3',
         value: new THREE.Vector3(0, 1, 0)
     },
 };
 
 const vs_SCALE = `
-uniform float time;
+varying vec3 v_pos;
+varying vec3 v_norm;
 void main()
 {
-    float r = cos(time * 6.74) * 0.05 + 0.95;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position * r, 1.0);
+    v_norm = (modelViewMatrix * vec4(normal, 1.0)).xyz;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    v_pos = gl_Position.xyz;
 }`;
 
 const fs_FLATCOLOR = `
-uniform float time;
+uniform vec3 mainlightpos;
+varying vec3 v_pos;
+varying vec3 v_norm;
 void main()
 {
+    vec3 L = mainlightpos - v_pos;
+    vec3 N = normalize(v_norm);
+    vec3 H = (reflect(N, L) + normalize(v_pos - cameraPosition)) / 2.0;
+
+    float ndl = dot(N, normalize(L));
+    float ndh = dot(N, normalize(H));
+    float r = floor(ndl * 24.0) / 24.0;
+
     gl_FragColor = vec4(
-        0.9,
-        sin(time * 2.5) * 0.5 + 0.5,
-        cos(time * 2.5) * 0.5 + 0.5,
-        sin(time * 10.0) * 0.25 + 0.75
+        r, r, r, 1.0
     );
 }`;
 
@@ -58,15 +67,15 @@ const vs_NORMALCOLOR = `
 varying vec3 v_normal;
 void main()
 {
-    v_normal = abs(normal);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    v_normal = normalize(gl_Position.xyz);
 }`;
 
 const fs_NORMALCOLOR = `
 varying vec3 v_normal;
 void main()
 {
-    gl_FragColor = vec4(v_normal, 1.0);
+    gl_FragColor = vec4(v_normal * 1.0, 1.0);
 }
 `;
 
@@ -75,9 +84,9 @@ varying float v_ypos;
 varying vec2 v_uv;
 void main()
 {
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    v_ypos = position.y;
     v_uv = uv;
+    v_ypos = position.y;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`;
 
 const fs_YPOSCOLOR = `
@@ -86,12 +95,13 @@ varying float v_ypos;
 varying vec2 v_uv;
 void main()
 {
-    float delt = cos(time * 3.0) * 8.0 + 9.0;
+    float delt = cos(time * 3.0) * 8.0 + 10.0;
     gl_FragColor = vec4(
         cos(v_ypos) * 0.5 + 0.5,
         0.15 + floor(v_uv.x * delt) / delt,
         0.15 + floor(v_uv.y * delt) / delt,
-        1);
+        1
+    );
 }`;
 
 function getRandomMaterial(color)
@@ -123,7 +133,7 @@ function getRandomMaterial(color)
             uniforms: uniform,
             vertexShader: targetSet.vert,
             fragmentShader: targetSet.frag,
-            transparent: true,
+            // transparent: true,
         });
     }
     return material;
@@ -172,18 +182,19 @@ function initAmmo()
     ammoWorld.setGravity(new Ammo.btVector3(0, -9.82, 0));
 }
 
-function initScene()
+async function initScene()
 {
     // base light
     light = new THREE.PointLight(0xffe0b0, 1.5);
     light.decay = 2.0;
-    light.castShadow = true;
+    light.castShadow = false;
     light.shadow.bias = 0.00001;
     light.shadow.mapSize.Width = 1024;
     light.shadow.mapSize.Height = 1024;
-    light.position.x = 10;
-    light.position.y = 15;
-    light.position.z = 20;
+    let lightPos = new THREE.Vector3(10, 15, 20);
+    light.position.copy(lightPos);
+    lightPos.normalize();
+    uniform.mainlightpos.value = lightPos;
     scene.add(light);
     scene.add(new THREE.PointLightHelper(light));
 
@@ -192,7 +203,7 @@ function initScene()
 
     // floor
     const FLOOR_SIZE = 7.75;
-    let floorMaterial = new THREE.MeshLambertMaterial({ color: 0x505050 });
+    let floorMaterial = new THREE.MeshLambertMaterial({ color: 0x808080 });
     let floorView = new THREE.Mesh(new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE), floorMaterial);
     floorView.position.y = 1.0;
     floorView.rotation.x = - Math.PI * 0.5;
@@ -209,8 +220,64 @@ function initScene()
     scene.add(floor);
     
     // ammo
+    let addToScene = (mesh, shape, mass, pos)=>
+    {
+        let x = pos.x, y = pos.y, z = pos.z;
+        rotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI * (Math.random() * 0.5));
+        mesh.castShadow = true;
+        let body = addBody(mesh, shape,
+            pos=new THREE.Vector3(
+                x + Math.random() * 1 - 0.5 - (X * 0.5),
+                y + Math.random() * 0.2 - 0.1 + 1.5,
+                z + Math.random() * 1 - 0.5 - (Z * 0.5)),
+            quat=rotation,
+            mass=mass,
+        );
+        body.setRestitution(0.25);
+        scene.add(mesh);
+    }
+
+    let addRandomBox = async (size, material, shape, pos)=>
+    {
+        let l = Math.floor(Math.random() * 3.0);
+        switch (l)
+        {
+            case 0:
+                let fontloader = new THREE.FontLoader();
+                let chrFrom = "A".charCodeAt(0);
+                let chrTo = "z".charCodeAt(0);
+                let charCode = Math.floor(Math.random() * (chrTo - chrFrom)) + chrFrom;
+                await fontloader.load("static/fonts/Ubuntu_Bold.json",
+                    (loadedFont)=>
+                    {
+                        let font = loadedFont;
+                        let geom = new THREE.TextGeometry(String.fromCharCode(charCode),
+                        {
+                            size: size, height: size * 0.85,
+                            curveSegments: 12,
+                            font: font,
+                            bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.01,
+                        });
+
+                        let center = new THREE.Object3D();
+                        let mesh = new THREE.Mesh(geom, material);
+                        mesh.position.copy(new THREE.Vector3(size * -0.5, size * -0.5, size * -0.5));
+                        center.add(mesh);
+                        addToScene(center, shape, size * size * size, pos);
+                    });
+                break;
+
+            default:
+                addToScene(
+                    new THREE.Mesh(
+                        new THREE.BoxGeometry(size, size, size, 4, 4, 4),
+                        material),
+                    shape, size * size * size, pos);
+        }
+    };
+
     let rotation = new THREE.Quaternion();
-    const X = 4, Y = 4, Z = 4;
+    const X = 4, Y = 8, Z = 4;
     for (var x = 0; x < X; x++)
     {
         for (var y = 0; y < Y; y++)
@@ -219,31 +286,22 @@ function initScene()
             {
                 let geom = null;
                 let shape = null;
-                let size = 0.7 + Math.random() * 0.4
+                let size = 0.7 + Math.random() * 0.4;
+                let pos = new THREE.Vector3(x, y, z);
+                let color = (x / X) * 0xff << 16 | (y / Y) * 0xff << 8 | (z / Z) * 0xff << 0;
+                let material = getRandomMaterial(color);
+
                 if (Math.random() < 0.5)
                 {
-                    geom = new THREE.BoxGeometry(size, size, size, 4, 4, 4);
                     shape = new Ammo.btBoxShape(new Ammo.btVector3(size * .5, size * .5, size * .5));
-                } else
-                {
-                    geom = new THREE.SphereGeometry(radius=size * 0.5, widthSegments=12, heightSegments=12);
-                    shape = new Ammo.btSphereShape(size * 0.5);
+                    addRandomBox(size, material, shape, pos);
                 }
-
-                let color = (x / X) * 0xff << 16 | (y / Y) * 0xff << 8 | (z / Z) * 0xff << 0;
-                let boxMat = getRandomMaterial(color);
-                let mesh = new THREE.Mesh(geom, boxMat);
-                rotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI * (Math.random() * 0.5));
-                mesh.castShadow = true;
-                addBody(mesh, shape,
-                    pos=new THREE.Vector3(
-                        x + Math.random() * 0.4 - 0.2 - (X * 0.5),
-                        y + Math.random() * 0.2 - 0.1 + 10,
-                        z + Math.random() * 0.4 - 0.2 - (Z * 0.5)),
-                    quat=rotation,
-                    mass=size*size*size,
-                );
-                scene.add(mesh);
+                else
+                {
+                    shape = new Ammo.btSphereShape(size * 0.5);
+                    geom = new THREE.SphereGeometry(radius=size * 0.5, widthSegments=12, heightSegments=12);
+                    addToScene(new THREE.Mesh(geom, material), shape, size * size * size, pos);
+                }                
             }
         }
     }
@@ -269,13 +327,14 @@ function animate()
             let pos = trans.getOrigin();
             let quat = trans.getRotation();
 
-            if (pos.y() < -5)
+            if (pos.y() < -7 || Math.abs(pos.x()) > 10 || Math.abs(pos.z()) > 10)
             {
                 trans.setOrigin(new Ammo.btVector3(
                     Math.random() * 1 - 0.5,
                     10,
                     Math.random() * 1 - 0.5));
                 body.setWorldTransform(trans);
+                body.setLinearVelocity(new Ammo.btVector3(0, 0, 0));
             }
 
             threeObj.position.set(pos.x(), pos.y(), pos.z());
