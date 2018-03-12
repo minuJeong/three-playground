@@ -68,7 +68,7 @@ void main()
     float ndh = dot(v_worldNorm, normalize(H));
     float fresnel = dot(v_worldNorm, normalize(E));
 
-    vec3 diffuse = mix(vec3(0.6, 0.8, 0.9), vec3(0.9, 0.1, 0.4), 1.0 - ndl);
+    vec3 diffuse = mix(vec3(0.76, 0.97, 0.47), vec3(0.9, 0.1, 0.4), 1.0 - ndl);
     vec3 fresnelColor = mix(vec3(0.0, 0.0, 0.0), vec3(1.0, 0.1, 0.1), v_fresnel);
 
     gl_FragColor = vec4(diffuse + fresnelColor, 1.0);
@@ -97,7 +97,7 @@ void main()
     vec2 dd = abs(vec2(0.5, 0.5) - v_uv.xy);
     dd = dd - mod(dd, abs(cos(time) * 0.2));
     float dp = length(pow(dd, vec2(4.0, 4.0)));
-    vec3 dclr = vec3(dp, dp * 0.5, dp) * 12.5;
+    vec3 dclr = vec3(dp, dp, dp) * 12.5;
     gl_FragColor = vec4(nc + dclr, 1.0);
 }
 `;
@@ -161,7 +161,7 @@ void main()
     d = max(vec2(d.x, d.x), vec2(d.y, d.y));
     vec3 c2 = vec3(0.11, 0.11, 0.12) * (d.x + d.y);
 
-    gl_FragColor = vec4((c1 + c2) * pow(ndl * 1.5, 1.25), 1.0);
+    gl_FragColor = vec4((c1 + c2) * pow(ndl * 1.5, 1.25), 1.0 + pow(v_pos.y * 0.03, 3.5));
 }`;
 
 function getRandomMaterial(color)
@@ -219,9 +219,9 @@ function initThree()
     camera = new THREE.PerspectiveCamera(
         55, W / H, 0.1, 10000
     );
-    camera.position.y = 4;
+    camera.position.y = 3;
     camera.position.z = 9;
-    camera.rotation.x = -Math.atan2(camera.position.y - 0.85, camera.position.z);
+    camera.rotation.x = -Math.atan2(camera.position.y - 2.0, camera.position.z);
     scene.add(camera);
 
     renderer.setSize(W, H);
@@ -258,7 +258,9 @@ async function initScene()
         uniforms: uniform,
         vertexShader: vs_Floor,
         fragmentShader: fs_Floor,
+        transparent: true,
     });
+
     let floorView = new THREE.Mesh(
         new THREE.BoxGeometry(FLOOR_SIZE, FLOOR_HEIGHT, FLOOR_SIZE),
         floorMaterial
@@ -333,7 +335,7 @@ async function initScene()
     };
 
     let rotation = new THREE.Quaternion();
-    const X = 4, Y = 8, Z = 4;
+    const X = 5, Y = 12, Z = 5;
     for (var x = 0; x < X; x++)
     {
         for (var y = 0; y < Y; y++)
@@ -389,7 +391,7 @@ function animate()
                     10,
                     Math.random() * 1 - 0.5));
                 body.setWorldTransform(trans);
-                body.setLinearVelocity(new Ammo.btVector3(0, 0, 0));
+                body.setLinearVelocity(new Ammo.btVector3(0, 1, 0));
             }
 
             threeObj.position.set(pos.x(), pos.y(), pos.z());
