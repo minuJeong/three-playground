@@ -317,7 +317,7 @@ async function initScene()
                         let mesh = new THREE.Mesh(geom, material);
                         mesh.position.copy(new THREE.Vector3(size * -0.5, size * -0.5, size * -0.125));
                         center.add(mesh);
-                        shape = new Ammo.btBoxShape(new Ammo.btVector3(size * .5, size * .5, size * .1,  25));
+                        shape = new Ammo.btBoxShape(new Ammo.btVector3(size * .5, size * .5, size * .125,  25));
                         addToScene(center, shape, size * size * size, pos);
                     });
                 break;
