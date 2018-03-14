@@ -317,7 +317,7 @@ async function initScene()
                         let mesh = new THREE.Mesh(geom, material);
                         mesh.position.copy(new THREE.Vector3(size * -0.5, size * -0.5, size * -0.125));
                         center.add(mesh);
-                        shape = new Ammo.btBoxShape(new Ammo.btVector3(size * .5, size * .5, size * .125));
+                        shape = new Ammo.btBoxShape(new Ammo.btVector3(size * .5, size * .5, size * .1,  25));
                         addToScene(center, shape, size * size * size, pos);
                     });
                 break;
@@ -333,7 +333,7 @@ async function initScene()
     };
 
     let rotation = new THREE.Quaternion();
-    const X = 4, Y = 8, Z = 4;
+    const X = 5, Y = 8, Z = 5;
     for (var x = 0; x < X; x++)
     {
         for (var y = 0; y < Y; y++)
