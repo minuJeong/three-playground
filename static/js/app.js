@@ -254,7 +254,7 @@ function initThree()
     );
     camera.position.y = 4;
     camera.position.z = 8;
-    camera.rotation.x = -Math.atan2(camera.position.y + 1, camera.position.z);
+    camera.rotation.x = -Math.atan2(camera.position.y - 0.5, camera.position.z);
     scene.add(camera);
     
     composer = new POSTPROCESSING.EffectComposer(renderer);
