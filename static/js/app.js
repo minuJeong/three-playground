@@ -75,6 +75,7 @@ void main()
 }`;
 
 const vs_NORMALCOLOR = `
+uniform float time;
 varying vec3 v_worldNorm;
 varying vec2 v_uv;
 void main()
@@ -102,28 +103,48 @@ void main()
 }
 `;
 
-const vs_YPOSCOLOR = `
-varying float v_ypos;
+const vs_POSCOLOR = `
+varying vec3 v_pos;
+varying vec4 v_wpos;
+varying vec3 v_worldNorm;
 varying vec2 v_uv;
 void main()
 {
     v_uv = uv;
-    v_ypos = position.y;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    v_pos = position;
+    v_wpos = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    gl_Position = v_wpos;
+    mat3 modelMat3 = mat3(modelMatrix[0].xyz,
+                          modelMatrix[1].xyz,
+                          modelMatrix[2].xyz);
+    v_worldNorm = normalize(modelMat3 * normal);
 }`;
 
-const fs_YPOSCOLOR = `
+const fs_POSCOLOR = `
 uniform float time;
-varying float v_ypos;
+varying vec3 v_pos;
+varying vec4 v_wpos;
+varying vec3 v_worldNorm;
 varying vec2 v_uv;
 void main()
 {
-    float delt = cos(time * 3.0) * 8.0 + 10.0;
+    vec3 L = vec3(0.0, 10.0, 35.0) - v_pos;
+    float ndl = dot(v_worldNorm, normalize(L));
+
+    float delt = cos(time * 7.5) * 3.0 + 5.0;
+    float sliced = (floor(v_uv.x * delt) / delt + floor(v_uv.y * delt) / delt) * 0.75;
+    float lposlooped = sin(v_pos.x) * 0.25 + cos(v_pos.y) * 0.25 + 1.5;
+    float wposlooped = (cos(v_wpos.x) + sin(v_wpos.y) + cos(v_wpos.z)) * 0.25 + 0.45;
+    vec3 c1 = vec3(wposlooped, sliced, lposlooped);
+
+    vec2 d = abs(v_uv - vec2(0.5, 0.5));
+    d = floor(d / vec2(0.22, 0.22));
+    d = min(vec2(d.x, d.x), vec2(d.y, d.y));
+    vec3 c2 = vec3(0.21, 0.31, 0.56) * (d.x + d.y);
+
     gl_FragColor = vec4(
-        cos(v_ypos) * 0.5 + 0.5,
-        0.15 + floor(v_uv.x * delt) / delt,
-        0.15 + floor(v_uv.y * delt) / delt,
-        1
+        mix(c1, c2, 0.5) * ndl,
+        1.0
     );
 }`;
 
@@ -152,16 +173,20 @@ void main()
     vec3 L = vec3(0.0, 10.0, 35.0) - v_pos;
     float ndl = dot(v_worldNorm, normalize(L));
     float distance = length(L) / 40.0;
-    float slicer = 16.0;
+    float slicer = 32.0;
     float v = (floor((1.0 / distance) * slicer) / slicer) * 0.95;
     vec3 c1 = vec3(0.66, 0.66, 0.66) * v;
 
     vec2 d = abs(v_uv - vec2(0.5, 0.5));
-    d = floor(d / vec2(0.465, 0.465));
+    d = floor(d / vec2(0.485, 0.485));
     d = max(vec2(d.x, d.x), vec2(d.y, d.y));
     vec3 c2 = vec3(0.11, 0.11, 0.12) * (d.x + d.y);
 
-    gl_FragColor = vec4((c1 + c2) * pow(ndl * 1.5, 1.25), 1.0);
+    float delt = cos(time * 0.25) * 3.0 + 5.0;
+    float sliced = (floor(v_uv.x * delt) / delt + floor(v_uv.y * delt) / delt) * 0.35;
+    vec3 c3 = vec3(sliced, sliced, sliced);
+
+    gl_FragColor = vec4((c1 + c2 + c3) * pow(ndl, 1.0), 1.0);
 }`;
 
 function getRandomMaterial(color)
@@ -175,10 +200,10 @@ function getRandomMaterial(color)
         vert: vs_NORMALCOLOR,
         frag: fs_NORMALCOLOR,
     },
-    // {
-    //     vert: vs_YPOSCOLOR,
-    //     frag: fs_YPOSCOLOR,
-    // }
+    {
+        vert: vs_POSCOLOR,
+        frag: fs_POSCOLOR,
+    }
     ];
 
     const SHADER_COUNT = shaderSet.length;
@@ -323,10 +348,26 @@ async function initScene()
                 break;
 
             default:
+                let subd = 8;
+                let geom = new THREE.BoxGeometry(size, size, size, subd, subd, subd);
                 shape = new Ammo.btBoxShape(new Ammo.btVector3(size * .5, size * .5, size * .5));
+
+                let push = 0.046;
+                let pushTh = size * 0.75;
+                let len = geom.vertices.length;
+                for(var i = 0; i < len; i++)
+                {
+                    let l = geom.vertices[i].length();
+                    if (l > pushTh)
+                    {
+                        geom.vertices[i].x += Math.random() * push - push * 0.5;
+                        geom.vertices[i].y += Math.random() * push - push * 0.5;
+                        geom.vertices[i].z += Math.random() * push - push * 0.5;
+                    }
+                }
                 addToScene(
                     new THREE.Mesh(
-                        new THREE.BoxGeometry(size, size, size, 4, 4, 4),
+                        geom,
                         material),
                     shape, size * size * size, pos);
         }
@@ -354,7 +395,12 @@ async function initScene()
                 else
                 {
                     shape = new Ammo.btSphereShape(size * 0.5);
-                    geom = new THREE.SphereGeometry(radius=size * 0.5, widthSegments=24, heightSegments=24);
+                    geom = new THREE.SphereGeometry(radius=size * 0.5, widthSegments=32, heightSegments=32);
+                    let len = geom.vertices.length;
+                    for (var i = 0; i < len; i++)
+                    {
+                        geom.vertices[i].x += Math.random() * 0.025 - 0.0125;
+                    }
                     addToScene(new THREE.Mesh(geom, material), shape, size * size * size, pos);
                 }                
             }
