@@ -1,4 +1,9 @@
 
+function sleep(ms)
+{
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 var W = stage.clientWidth;
 var H = stage.clientHeight;
 
@@ -18,60 +23,70 @@ function toAmmoQuat(threeQuat)
 }
 
 let renderer = null;
+let composer = null;
 let clock = null;
 let scene = null;
 let camera = null;
 let entity = null;
 let light = null;
 
-const uniform = {
-    time: {
+const uniform =
+{
+    time:
+    {
         value: 0.0
     },
-    mainlightpos: {
+    mainlightpos:
+    {
         type: 'v3',
         value: new THREE.Vector3(0, 1, 0)
+    },
+    grabTexture:
+    {
+        type: 't',
+        value: null,
     },
 };
 
 const vs_DEFAULT = `
-varying vec3 E;
-varying vec3 v_pos;
+varying vec3 v_wpos;
 varying vec3 v_worldNorm;
-varying float v_fresnel;
+varying vec3 v_localNorm;
 void main()
 {
-    vec3 worldpos = (modelMatrix * vec4(position, 1.0)).xyz;
-    vec3 E = normalize(worldpos - cameraPosition);
     mat3 modelMat3 = mat3(modelMatrix[0].xyz,
                           modelMatrix[1].xyz,
                           modelMatrix[2].xyz);
-    v_worldNorm = normalize(modelMat3 * normal);
-    v_fresnel = min(dot(E, v_worldNorm), 1.0) * 2.0;
-
+    v_localNorm = normal;
+    v_worldNorm = normalize(modelMat3 * v_localNorm);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    v_pos = (modelMatrix * vec4(position, 1.0)).xyz;
+    v_wpos = (modelMatrix * vec4(position, 1.0)).xyz;
 }`;
 
 const fs_FLATCOLOR = `
+uniform float time;
 uniform vec3 mainlightpos;
-varying vec3 E;
-varying vec3 v_pos;
+
+varying vec3 v_wpos;
 varying vec3 v_worldNorm;
-varying float v_fresnel;
+varying vec3 v_localNorm;
 void main()
 {
-    vec3 L = mainlightpos - v_pos;
-    vec3 H = (normalize(reflect(v_worldNorm, L)) + E) / 2.0;
-
+    vec3 L = mainlightpos - v_wpos;
+    vec3 E = cameraPosition - v_wpos;
+    vec3 H = (L + E) * 0.5;
     float ndl = dot(v_worldNorm, normalize(L));
     float ndh = dot(v_worldNorm, normalize(H));
-    float fresnel = dot(v_worldNorm, normalize(E));
 
-    vec3 diffuse = mix(vec3(0.6, 0.8, 0.9), vec3(0.9, 0.1, 0.4), 1.0 - ndl);
-    vec3 fresnelColor = mix(vec3(0.0, 0.0, 0.0), vec3(1.0, 0.1, 0.1), v_fresnel);
+    vec3 cbright = mix(abs(v_worldNorm), abs(v_localNorm), (ndh + ndl) * 0.5);
+    vec3 cdark = vec3(0.7, 0.77, 2.95);
 
-    gl_FragColor = vec4(diffuse + fresnelColor, 1.0);
+    vec3 specular = vec3(1.0, 1.0, 1.0) * pow(ndh, 128.0);
+
+    gl_FragColor = vec4(
+        mix(cdark, cbright, ndl * 1.25) * max(ndl, 0.44) + specular,
+        1.0
+    );
 }`;
 
 const vs_NORMALCOLOR = `
@@ -165,31 +180,26 @@ void main()
 
 const fs_Floor = `
 uniform float time;
+uniform vec3 mainlightpos;
+
 varying vec3 v_pos;
 varying vec3 v_worldNorm;
 varying vec2 v_uv;
 void main()
 {
-    vec3 L = vec3(0.0, 10.0, 35.0) - v_pos;
+    vec3 L = mainlightpos - v_pos;
     float ndl = dot(v_worldNorm, normalize(L));
-    float distance = length(L) / 40.0;
-    float slicer = 32.0;
-    float v = (floor((1.0 / distance) * slicer) / slicer) * 0.95;
-    vec3 c1 = vec3(0.66, 0.66, 0.66) * v;
+    vec3 c1 = vec3(0.26, 0.65, 0.92);
 
     vec2 d = abs(v_uv - vec2(0.5, 0.5));
     d = floor(d / vec2(0.485, 0.485));
     d = max(vec2(d.x, d.x), vec2(d.y, d.y));
     vec3 c2 = vec3(0.11, 0.11, 0.12) * (d.x + d.y);
 
-    float delt = cos(time * 0.25) * 3.0 + 5.0;
-    float sliced = (floor(v_uv.x * delt) / delt + floor(v_uv.y * delt) / delt) * 0.35;
-    vec3 c3 = vec3(sliced, sliced, sliced);
-
-    gl_FragColor = vec4((c1 + c2 + c3) * pow(ndl, 1.0), 1.0);
+    gl_FragColor = vec4(mix(c2, c1, max(ndl, 0.44)), 1.0);
 }`;
 
-function getRandomMaterial(color)
+function getRandomMaterial()
 {
     let shaderSet =
     [{
@@ -208,20 +218,15 @@ function getRandomMaterial(color)
 
     const SHADER_COUNT = shaderSet.length;
     let material = null;
-    let i = Math.floor(Math.random() * (SHADER_COUNT));
-    if(i >= SHADER_COUNT)
+    let targetSet = shaderSet[
+        Math.floor(Math.random() * (SHADER_COUNT))
+    ];
+    material = new THREE.ShaderMaterial(
     {
-        material = new THREE.MeshStandardMaterial({ color: color, });
-    } else {
-        let targetSet = shaderSet[i];
-        material = new THREE.ShaderMaterial(
-        {
-            uniforms: uniform,
-            vertexShader: targetSet.vert,
-            fragmentShader: targetSet.frag,
-            // transparent: true,
-        });
-    }
+        uniforms: uniform,
+        vertexShader: targetSet.vert,
+        fragmentShader: targetSet.frag,
+    });
     return material;
 }
 
@@ -234,22 +239,31 @@ let ammoWorld = null;
 
 function initThree()
 {
+    
     renderer = new THREE.WebGLRenderer(
     {
         alpha: true,
-        antialias: true,
+        antialias: false,
     });
+    renderer.setSize(W, H);
     clock = new THREE.Clock();
+
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(
         55, W / H, 0.1, 10000
     );
     camera.position.y = 4;
-    camera.position.z = 9;
-    camera.rotation.x = -Math.atan2(camera.position.y - 0.85, camera.position.z);
+    camera.position.z = 8;
+    camera.rotation.x = -Math.atan2(camera.position.y + 1, camera.position.z);
     scene.add(camera);
+    
+    composer = new POSTPROCESSING.EffectComposer(renderer);
+    composer.addPass(new POSTPROCESSING.RenderPass(scene, camera));
 
-    renderer.setSize(W, H);
+    let pp_Pass_Bloom = new POSTPROCESSING.BloomPass();
+    pp_Pass_Bloom.renderToScreen = true;
+    composer.addPass(pp_Pass_Bloom);
+
     stage.appendChild(renderer.domElement);
 }
 
@@ -269,15 +283,15 @@ function initAmmo()
 async function initScene()
 {
     // abstract light
-    let lightPos = new THREE.Vector3(-5, 15, 10);
+    let lightPos = new THREE.Vector3(-5, 20, 20);
     uniform.mainlightpos.value = lightPos;
 
     // ambient light
     scene.add(new THREE.AmbientLight(0x404040, 2.0));
 
     // floor
-    const FLOOR_SIZE = 5.5;
-    const FLOOR_HEIGHT = 5.0;
+    const FLOOR_SIZE = 3.0;
+    const FLOOR_HEIGHT = FLOOR_SIZE;
     let floorMaterial = new THREE.ShaderMaterial(
     {
         uniforms: uniform,
@@ -291,127 +305,155 @@ async function initScene()
 
     let floor = new THREE.Object3D();
     floor.add(floorView);
-    addBody(
+
+    let floorPos = {
+        x: 0,
+        y: -FLOOR_HEIGHT * 0.5,
+        z: 0,
+    };
+    let floorBody = await addBody(
         floor,
         new Ammo.btBoxShape(new Ammo.btVector3(FLOOR_SIZE * 0.5, FLOOR_HEIGHT * 0.5, FLOOR_SIZE * 0.5)),
-        pos=new THREE.Vector3(0, -FLOOR_HEIGHT * 0.5, 0),
+        pos=new THREE.Vector3(floorPos.x, floorPos.y, floorPos.z),
         quat=null,
         mass=0,
     );
     scene.add(floor);
     
     // ammo
-    let addToScene = (mesh, shape, mass, pos)=>
+    let rotation = new THREE.Quaternion();
+    let addToScene = async (mesh, shape, mass, pos)=>
     {
-        let x = pos.x, y = pos.y, z = pos.z;
         rotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI * (Math.random() * 0.5));
-        let body = addBody(mesh, shape,
-            pos=new THREE.Vector3(
-                x + Math.random() * 1 - 0.5 - (X * 0.5),
-                y + Math.random() * 0.2 - 0.1 + 1.5,
-                z + Math.random() * 1 - 0.5 - (Z * 0.5)),
+        let body = await addBody(mesh, shape,
+            pos=pos,
             quat=rotation,
             mass=mass,
         );
-        body.setRestitution(0.45);
+        body.setRestitution(0.85);
         scene.add(mesh);
     }
 
-    let addRandomBox = async (size, material, shape, pos)=>
+    let characters = "ABCDEFGHKLMNOPQRSTUVWXYZ0123456789";
+
+    // assume size doesn't change
+    let charGeomCache = {};
+
+    let addRandomBody = async (size, material, shape, pos)=>
     {
-        let l = Math.floor(Math.random() * 3.0);
+        let l = Math.floor(Math.random() * 20.0);
+        var len = 0;
+        var geom = null;
+
+        let addTextBody = async () =>
+        {
+            let charIdx = Math.floor(Math.random() * characters.length);
+            let charDisplay = characters[charIdx];
+            geom = charGeomCache[charDisplay];
+            
+            if (geom == null)
+            {
+                geom = new THREE.TextGeometry(
+                charDisplay,
+                {
+                    size: size, height: size * 0.25,
+                    curveSegments: 12,
+                    font: loadedFont,
+                    bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.01,
+                });
+                charGeomCache[charDisplay] = geom;
+            }
+
+            let center = new THREE.Object3D();
+            let mesh = new THREE.Mesh(geom, material);
+            mesh.position.copy(new THREE.Vector3(size * -0.5, size * -0.5, size * -0.125));
+            center.add(mesh);
+            shape = new Ammo.btBoxShape(new Ammo.btVector3(size * .5, size * .5, size * .125,  25));
+            await addToScene(center, shape, size * size * size, pos);
+        };
+
+        let addBoxBody = async () =>
+        {
+            // box geometry is boring. let it smaller than others.
+            size *= 0.65;
+
+            let subd = 8;
+            geom = new THREE.BoxGeometry(size, size, size, subd, subd, subd);
+            shape = new Ammo.btBoxShape(new Ammo.btVector3(size * .5, size * .5, size * .5));
+
+            let push = 0.046;
+            let pushTh = size * 0.75;
+            len = geom.vertices.length;
+            for(var i = 0; i < len; i++)
+            {
+                let l = geom.vertices[i].length();
+                if (l > pushTh)
+                {
+                    geom.vertices[i].x += Math.random() * push - push * 0.5;
+                    geom.vertices[i].y += Math.random() * push - push * 0.5;
+                    geom.vertices[i].z += Math.random() * push - push * 0.5;
+                }
+            }
+            await addToScene(
+                new THREE.Mesh(
+                    geom,
+                    material),
+                shape, size * size * size, pos);
+        };
+
+        let addSphereBody = async () =>
+        {
+            shape = new Ammo.btSphereShape(size * 0.5);
+            geom = new THREE.SphereGeometry(radius=size * 0.5, widthSegments=32, heightSegments=32);
+            len = geom.vertices.length;
+            for (var i = 0; i < len; i++)
+            {
+                geom.vertices[i].x += Math.random() * 0.025 - 0.0125;
+            }
+            await addToScene(new THREE.Mesh(geom, material), shape, size * size * size, pos);
+        };
+
         switch (l)
         {
             case 0:
-                let fontloader = new THREE.FontLoader();
-                let characters = "ABCDEFGHKMNOQRSTUVWXYZ";
-                let charIdx = Math.floor(Math.random() * characters.length);
-                await fontloader.load("static/fonts/Ubuntu_Bold.json",
-                    (loadedFont)=>
-                    {
-                        let font = loadedFont;
-                        let geom = new THREE.TextGeometry(characters[charIdx],
-                        {
-                            size: size, height: size * 0.25,
-                            curveSegments: 12,
-                            font: font,
-                            bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.01,
-                        });
-
-                        let center = new THREE.Object3D();
-                        let mesh = new THREE.Mesh(geom, material);
-                        mesh.position.copy(new THREE.Vector3(size * -0.5, size * -0.5, size * -0.125));
-                        center.add(mesh);
-                        shape = new Ammo.btBoxShape(new Ammo.btVector3(size * .5, size * .5, size * .125,  25));
-                        addToScene(center, shape, size * size * size, pos);
-                    });
+                await addBoxBody();
                 break;
 
-            default:
-                let subd = 8;
-                let geom = new THREE.BoxGeometry(size, size, size, subd, subd, subd);
-                shape = new Ammo.btBoxShape(new Ammo.btVector3(size * .5, size * .5, size * .5));
+            case 1:
+                await addSphereBody();
+                break;
 
-                let push = 0.046;
-                let pushTh = size * 0.75;
-                let len = geom.vertices.length;
-                for(var i = 0; i < len; i++)
-                {
-                    let l = geom.vertices[i].length();
-                    if (l > pushTh)
-                    {
-                        geom.vertices[i].x += Math.random() * push - push * 0.5;
-                        geom.vertices[i].y += Math.random() * push - push * 0.5;
-                        geom.vertices[i].z += Math.random() * push - push * 0.5;
-                    }
-                }
-                addToScene(
-                    new THREE.Mesh(
-                        geom,
-                        material),
-                    shape, size * size * size, pos);
+
+            default:
+                await addTextBody();
         }
     };
 
-    let rotation = new THREE.Quaternion();
-    const X = 5, Y = 8, Z = 5;
-    for (var x = 0; x < X; x++)
+    let fontloader = new THREE.FontLoader();
+    var loadedFont = null;
+    await fontloader.load("static/fonts/Ubuntu_Bold.json", async (f)=>
     {
-        for (var y = 0; y < Y; y++)
-        {
-            for (var z = 0; z < Z; z++)
-            {
-                let geom = null;
-                let shape = null;
-                let size = 0.45 + Math.random() * 0.45;
-                let pos = new THREE.Vector3(x, y, z);
-                let color = (x / X) * 0xff << 16 | (y / Y) * 0xff << 8 | (z / Z) * 0xff << 0;
-                let material = getRandomMaterial(color);
+        loadedFont = f;
 
-                if (Math.random() < 0.5)
-                {
-                    addRandomBox(size, material, shape, pos);
-                }
-                else
-                {
-                    shape = new Ammo.btSphereShape(size * 0.5);
-                    geom = new THREE.SphereGeometry(radius=size * 0.5, widthSegments=32, heightSegments=32);
-                    let len = geom.vertices.length;
-                    for (var i = 0; i < len; i++)
-                    {
-                        geom.vertices[i].x += Math.random() * 0.025 - 0.0125;
-                    }
-                    addToScene(new THREE.Mesh(geom, material), shape, size * size * size, pos);
-                }                
-            }
+        const COUNT = 150;
+        const SIZE = 1.0;
+        for (var i = 0; i < COUNT; i++)
+        {
+            let geom = null;
+            let shape = null;
+            let pos = new THREE.Vector3(0, 5, 0);
+            let material = getRandomMaterial();
+
+            await addRandomBody(SIZE, material, shape, pos);
+            await sleep(15);
         }
-    }
+    });
 }
 
 function animate()
 {
     requestAnimationFrame(animate);
-    renderer.render(scene, camera);
+    composer.render(scene, camera);
 
     let deltaTime = clock.getDelta();
     ammoWorld.stepSimulation(deltaTime, 10);
@@ -432,7 +474,7 @@ function animate()
             {
                 trans.setOrigin(new Ammo.btVector3(
                     Math.random() * 1 - 0.5,
-                    10,
+                    5,
                     Math.random() * 1 - 0.5));
                 body.setWorldTransform(trans);
                 body.setLinearVelocity(new Ammo.btVector3(0, 0, 0));
@@ -444,7 +486,7 @@ function animate()
     });
 }
 
-function addBody(threeObj, ammoShape, pos=null, quat=null, mass=1)
+async function addBody(threeObj, ammoShape, pos=null, quat=null, mass=1)
 {
     if (pos == null) { pos = new THREE.Vector3(0, 0, 0); }
     if (quat == null)
@@ -515,11 +557,11 @@ window.addEventListener("resize", (e)=>
     renderer.setSize(W, H);
 });
 
-Ammo().then(()=>
+Ammo().then(async ()=>
 {
     initThree();
     initAmmo();
-    initScene();
     animate();
+    await initScene();
 });
 

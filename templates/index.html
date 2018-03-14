@@ -3,6 +3,8 @@
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/animejs/2.2.0/anime.min.js"></script>
     <script type="text/javascript" src="/static/js/ammo.js"></script>
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/three.js/90/three.min.js"></script>
+    <script type="text/javascript" src="/static/js/postprocessing.min.js"></script>
+    <script type="text/javascript" src="/static/js/async.min.js"></script>
     <style type="text/css">
         .clickable
         {
@@ -63,7 +65,7 @@
         width: 100%;
         height: 100%;
         color: #ddd;
-        background: linear-gradient(#121314, #343230);">
+        background: linear-gradient(#111314, #203246);">
 
         <div style="
             display: flex;
@@ -81,7 +83,7 @@
                 transform: translateX(-50%);
                 border-radius: 15px;
                 background-color: #222a;
-                width: 400px;
+                width: 700px;
                 height: 100%;
                 padding: 20px;
                 text-align: center;">
@@ -95,6 +97,10 @@
                 &nbsp;-&nbsp;
                 <div class="clickable depitem" onclick="window.open('https://threejs.org/');">
                     Three JS
+                </div>
+                &nbsp;-&nbsp;
+                <div class="clickable depitem" onclick="window.open('https://vanruesc.github.io/postprocessing/');">
+                    Postprocessing JS
                 </div>
                 &nbsp;-&nbsp;
                 <div class="clickable depitem" onclick="window.open('https://github.com/kripken/ammo.js/');">
