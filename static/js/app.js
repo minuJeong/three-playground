@@ -239,7 +239,6 @@ let ammoWorld = null;
 
 function initThree()
 {
-    
     renderer = new THREE.WebGLRenderer(
     {
         alpha: true,
@@ -341,7 +340,6 @@ async function initScene()
 
     let addRandomBody = async (size, material, shape, pos)=>
     {
-        let l = Math.floor(Math.random() * 20.0);
         var len = 0;
         var geom = null;
 
@@ -413,7 +411,7 @@ async function initScene()
             await addToScene(new THREE.Mesh(geom, material), shape, size * size * size, pos);
         };
 
-        switch (l)
+        switch (Math.floor(Math.random() * 20.0))
         {
             case 0:
                 await addBoxBody();
@@ -422,7 +420,6 @@ async function initScene()
             case 1:
                 await addSphereBody();
                 break;
-
 
             default:
                 await addTextBody();
