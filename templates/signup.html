@@ -1,0 +1,82 @@
+<html>
+    <head>
+        <style type="text/css">
+            #username
+            {
+                position: absolute; bottom: 30px;
+                left: 70px;
+                width: 260px; height: 25px;
+                font-size: 15;
+                text-align: center;
+                background-color: #444;
+            }
+
+            #username:valid
+            {
+                color: #EEE;
+                border: none;
+            }
+
+            #username:invalid
+            {
+                color: #F00;
+                font-weight: bold;
+                box-shadow: 0 0 5px 1px red;
+            }
+        </style>
+    </head>
+    <body style="margin: 0px; background-color: #111; user-select: none;">
+        <div style="
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 400px; height: 275px;
+            text-align: center;
+            transform: translate(-50%, -50%);
+            border-radius: 10px;
+            background-image: linear-gradient(90deg, #333, #222);">
+
+            <div>
+                <div style="
+                    position: absolute;
+                    top: calc(50% - 30px); left: 50%;
+                    transform: translate(-50%, -50%);">
+                    <span style="font-size: 32px; color: #FFF;">
+                        SIX
+                    </span>
+
+                    <p style="font-size: 18px; color: #888; white-space: nowrap;">
+                        <span>
+                            Hello, adventurer,
+                        </span>
+                        <br>
+                        <span style="font-size: 26px; color: #AAA;" >
+                            What's your name?
+                        </span>
+                    </p>
+                </div>
+                <input id="username" type="text"
+                    onblur="username.focus();"
+                    required
+                    pattern="^[^<> ]+$"
+                    minlength="4"
+                    maxlength="12">
+            </div>
+        </div>
+    </body>
+</html>
+
+<script type="text/javascript">
+    document.addEventListener("keyup", function(e)
+    {
+        if (e.keyCode != 13) { return; }
+        if (!username.validity.valid)
+        {
+            return;
+        }
+
+        window.location = "/six?username=" + username.value;
+        username.value = "";
+        return;
+    });
+    username.focus();
+</script>
