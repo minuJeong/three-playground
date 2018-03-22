@@ -4,25 +4,46 @@
         <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/three.js/90/three.min.js"></script>
         <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/animejs/2.2.0/anime.min.js"></script>
         <script type="text/javascript" src="/static/js/postprocessing.min.js"></script>
+
+        <style type="text/css">
+            ::-webkit-scrollbar
+            {
+                visibility: hidden;
+            }
+        </style>
+
+        
     </head>
-    <body style="margin: 0px; padding: 0px;">
+    <body style="margin: 0px; padding: 0px; background-image: linear-gradient(#111, #222); background-color: #111;">
         <param id="username" value="{{user.username}}"></body>
-        <div id="stage" style="width: 100%; height: 100%; margin: 0px;">
-        </div>
-        <div style="
-            position: absolute; left: 10px; right: 10px; bottom: 10px; height: 120px;
-            background-image: linear-gradient(#333, #222);
-            color: #ccc;
-            overflow-y: scroll;
-            display: grid;
-            grid-template-rows: auto 25px;">
-            <div id="chat_history" style="width: 100%;"></div>
-            <input id="message_input" type="text"
-                style="visibility: hidden;
-                       width: 100%;" />
+        <div style="position: relative; width: 100%; height: 100%;">
+            <div id="stage" style="position: absolute; width: 100%; height: 100%; margin: 0px;"></div>
+
+            <div id="framerate_display" style="
+                position: absolute;
+                width: 80px;
+                top: 15px;
+                right: 15px;">
+            </div>
+
+            <div style="
+                position: absolute; left: 10px; right: 10px; bottom: 10px; height: 120px;
+                padding: 10px;
+                color: #ccc;
+                background-color: #222;
+                opacity: 0.9;
+                overflow-y: scroll;
+                display: grid;
+                grid-template-rows: auto 25px;">
+                <div id="chat_history" style="width: 100%;"></div>
+                <input id="message_input" type="text"
+                    style="visibility: hidden;
+                           width: 100%;" />
+            </div>
         </div>
     </body>
 </html>
 
+<!-- <script type="text/javascript" src="/static/js/six/chat.js"></script> -->
+<script type="text/javascript" src="/static/js/six/shaders.js"></script>
 <script type="text/javascript" src="/static/js/six/game.js"></script>
-<script type="text/javascript" src="/static/js/six/chat.js"></script>

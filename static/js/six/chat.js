@@ -1,8 +1,9 @@
+let SOCKET = new WebSocket("ws://posync-position-sync.7e14.starter-us-west-2.openshiftapps.com/:8080/");
+
 let CHAT = async() =>
 {
     let uuid = uuidv4();
     let userid = "user_" + uuid;
-    let socket = null;
 
     function uuidv4() {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -11,11 +12,8 @@ let CHAT = async() =>
         });
     }
 
-    // connect to server
-    socket = new WebSocket("ws://posync-position-sync.7e14.starter-us-west-2.openshiftapps.com/:8080/");
-
     // wait for connection
-    while(socket.readyState != 1)
+    while(SOCKET.readyState != 1)
     {
         console.log("pending connection to chat socket..");
         await new Promise((r) => setTimeout(r, 100));
@@ -23,12 +21,12 @@ let CHAT = async() =>
     console.log("connected to chat server.");
 
     // start listening chat
-    socket.send(JSON.stringify({
+    SOCKET.send(JSON.stringify({
         userid: userid
     }));
 
     // message income
-    socket.onmessage = (event) =>
+    SOCKET.onmessage = (event) =>
     {
         let line = document.createElement("div");
         line.textContent = event.data;
@@ -59,7 +57,7 @@ let CHAT = async() =>
             message_input.style.visibility = "hidden";
             is_chatting = false;
 
-            socket.send(JSON.stringify({
+            SOCKET.send(JSON.stringify({
                 userid: userid,
                 username: username.value,
                 msg: message_input.value,
@@ -69,10 +67,5 @@ let CHAT = async() =>
 
         return;
     });
-
-    setInterval(()=>
-    {
-        let payload = JSON.stringify({userid: userid,});
-    }, 33);
 }
 CHAT().then(() => console.log("chat connection initialized"));
